@@ -5,7 +5,7 @@ import {
 } from "react-router-dom";
 
 import MainLayout from "./layouts/MainLayout";
-
+import StudentProfile from "./pages/StudentProfile";
 import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
 import Teachers from "./pages/Teachers";
@@ -19,6 +19,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/students" element={<Students />} />
+          <Route path="/students/:id" element={<StudentProfile />} />
           <Route path="/teachers" element={<Teachers />} />
           <Route path="/fees" element={<Fees />} />
           <Route path="/reports" element={<Reports />} />

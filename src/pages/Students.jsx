@@ -1,20 +1,36 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../services/supabase";
+import { useNavigate } from "react-router-dom";
 
 function Students() {
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
-useEffect(() => {
-  fetchStudents();
-}, []);
-const [students, setStudents] = useState([]);
-
+    useEffect(() => {
+      fetchStudents(); }, []);
+  const [students, setStudents] = useState([]);
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    name: "",
+    student_name: "",
     father_name: "",
-    class: "",
-    phone: "",
+    mother_name: "",
+    roll_no: "",
+    course: "",
+    admission_date: "",
+  
+    aadhaar_no: "",
+    dob: "",
+    gender: "",
+    category: "",
+  
+    mobile_no: "",
+    father_mobile_no: "",
+  
+    address: "",
+  
+    total_fee: "",
+    other_fee: "",
+    discount_fee: "",
   });
   const updateStudent = async () => {
   const { error } = await supabase
@@ -94,13 +110,31 @@ const openEditModal = (student) => {
     .from("students")
     .insert([
       {
-        student_id: studentCode,
-        name: formData.name,
-        father_name: formData.father_name,
-        class: formData.class,
-        phone: formData.phone,
-        fee_status: "Due",
-      },
+       student_id: studentCode,
+     
+       student_name: formData.student_name,
+     
+       roll_no: formData.roll_no,
+       course: formData.course,
+       admission_date: formData.admission_date,
+     
+       father_name: formData.father_name,
+       mother_name: formData.mother_name,
+     
+       aadhaar_no: formData.aadhaar_no,
+       dob: formData.dob,
+     
+       gender: formData.gender,
+       category: formData.category,
+     
+       mobile_no: formData.mobile_no,
+       father_mobile_no:
+         formData.father_mobile_no,
+     
+       address: formData.address,
+     
+     },
+      
     ]);
 
   if (error) {
@@ -211,6 +245,14 @@ const openEditModal = (student) => {
                   >
                     Edit
                   </button>
+                  <button
+                      className="edit-btn"
+                      onClick={() =>
+                        navigate(`/students/${student.id}`)
+                      }
+                    >
+                      View
+                    </button>
 
                 </td>
               </tr>
@@ -235,42 +277,28 @@ const openEditModal = (student) => {
                 })
               }
             />
-            <input
-               type="text"
-               placeholder="Father / Guardian Name"
-               value={formData.father_name}
+              
+              <input
+                placeholder="Roll Number"
+                value={formData.roll_no}
                 onChange={(e) =>
-                setFormData({
-               ...formData,
-              father_name: e.target.value,
-            })
-          }
-      />
+                  setFormData({
+                    ...formData,
+                    roll_no: e.target.value,
+                  })
+                }
+              />
 
-            <input
-              type="text"
-              placeholder="Class"
-              value={formData.class}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  class: e.target.value,
-                })
-              }
-            />
-
-            <input
-              type="text"
-              placeholder="Phone"
-              value={formData.phone}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  phone: e.target.value,
-                })
-              }
-            />
-
+              <input
+                placeholder="Course"
+                value={formData.course}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    course: e.target.value,
+                  })
+                }
+              />
             <div className="modal-actions">
               <button
                 className="btn-secondary"
