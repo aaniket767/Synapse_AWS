@@ -702,3 +702,64 @@ tr:hover {
     max-width: none;
   }
 }
+/* --- Desktop Default Hide Trigger --- */
+.mobile-menu-toggle-trigger {
+  display: none;
+}
+
+/* --- Mobile Specific Fixes --- */
+@media (max-width: 768px) {
+  
+  /* Floating Toggle Trigger Button */
+  .mobile-menu-toggle-trigger {
+    display: block;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 999;
+    background: #818cf8;
+    color: #ffffff;
+    border: none;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+
+  /* Make sure main layout is fluid on mobile */
+  .layout {
+    display: block !important;
+    position: relative;
+  }
+
+  /* Main workspace expands to full screen width on mobile */
+  .main-content {
+    width: 100% !important;
+    margin-left: 0 !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    padding-top: 60px !important; /* Clears space for floating trigger button */
+  }
+
+  /* Sidebar Core Controls override */
+  .sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 900;
+    transition: transform 0.25s ease-in-out !important;
+  }
+
+  /* State Classes handled via React Hooks toggling */
+  .mobile-collapsed {
+    transform: translateX(-100%) !important; /* Slides completely outside viewport */
+  }
+
+  .mobile-expanded {
+    transform: translateX(0) !important; /* Slides into viewport overlaying content */
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.6);
+  }
+}
