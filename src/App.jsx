@@ -9,6 +9,7 @@ import Teachers from "./pages/Teachers";
 import Fees from "./pages/Fees";
 import Reports from "./pages/Reports";
 
+
 function App() {
   return (
     <BrowserRouter>

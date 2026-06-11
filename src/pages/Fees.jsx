@@ -1,174 +1,318 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../services/supabase";
+import {
+  MdAddCard,
+  MdReceiptLong,
+  MdSearch,
+  MdClose,
+  MdArrowDropDown,
+} from "react-icons/md";
 
 function Fees() {
-  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [payments, setPayments] = useState([]);
-  const [search, setSearch] = useState("");
+  const [studentsList, setStudentsList] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
-  const [studentSearch, setStudentSearch] = useState("");
+
+  // Search filter dropdown states inside modal
+  const [studentSearchInput, setStudentSearchInput] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedStudentDues, setSelectedStudentDues] = useState(0);
+
+  // Modal Form State Tracking
   const [formData, setFormData] = useState({
     student_id: "",
     student_name: "",
     class: "",
     payment_date: new Date().toISOString().split("T")[0],
     amount: "",
-    dues: "",
   });
 
   useEffect(() => {
-    fetchStudents();
     fetchPayments();
+    fetchStudentsDirectory();
   }, []);
 
-  async function fetchStudents() {
-    const { data, error } = await supabase.from("students").select("*").order("name");
-    if (!error) setStudents(data);
-  }
-
+  // 1. Fetch historical receipts ledger entries
   async function fetchPayments() {
-    const { data, error } = await supabase.from("payments").select("*").order("id", { ascending: false });
-    if (!error) setPayments(data);
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("payments")
+        .select("*")
+        .order("id", { ascending: false });
+
+      if (error) throw error;
+      setPayments(data || []);
+    } catch (err) {
+      console.error("Error pulling ledger history:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const addPayment = async () => {
-    if (!formData.student_id || !formData.payment_date || !formData.amount) {
-      alert("Fill all required fields");
-      return;
+  // 2. Fetch all student ledger records to enable dynamic autocomplete filtering
+  async function fetchStudentsDirectory() {
+    try {
+      const { data, error } = await supabase
+        .from("students")
+        .select(
+          "student_id, name, class, total_fee, other_fee, discount_fee, total_paid",
+        );
+      if (error) throw error;
+      setStudentsList(data || []);
+    } catch (err) {
+      console.error("Error loading auto-complete references:", err);
     }
+  }
 
-    const receiptNo = `RCPT-${Date.now()}`;
-    const { error } = await supabase.from("payments").insert([
-      {
-        student_id: formData.student_id,
-        student_name: formData.student_name,
-        class: formData.class,
-        payment_date: formData.payment_date,
-        amount: Number(formData.amount),
-        dues: Number(formData.dues || 0),
-        receipt_no: receiptNo,
-        status: "Paid",
-      },
-    ]);
+  // 3. Dynamic Selection Handler (Calculates existing dues on-the-fly)
+  const handleSelectStudent = (student) => {
+    const totalFee = Number(student.total_fee || 0);
+    const otherFee = Number(student.other_fee || 0);
+    const discountFee = Number(student.discount_fee || 0);
+    const totalPaid = Number(student.total_paid || 0);
 
-    if (error) {
-      console.error(error);
-      alert(error.message);
-      return;
-    }
+    // Live account calculation balance check
+    const currentDues = totalFee + otherFee - discountFee - totalPaid;
 
-    await fetchPayments();
-    setFormData({
-      student_id: "",
-      student_name: "",
-      class: "",
-      payment_date: new Date().toISOString().split("T")[0],
-      amount: "",
-      dues: "",
-    });
-    setShowModal(false);
+    setFormData((prev) => ({
+      ...prev,
+      student_id: student.student_id,
+      student_name: student.name,
+      class: student.class || "",
+    }));
+
+    setSelectedStudentDues(currentDues);
+    setStudentSearchInput(`${student.name} (${student.student_id})`);
+    setShowDropdown(false);
   };
 
-  const deletePayment = async (id) => {
-    if (!window.confirm("Delete payment statement?")) return;
-    const { error } = await supabase.from("payments").delete().eq("id", id);
-    if (error) {
-      console.error(error);
+  // 4. Double-table secure transaction billing pipeline
+  const addPayment = async (e) => {
+    e.preventDefault();
+    if (!formData.student_id || !formData.amount) {
+      alert("Please choose a student and enter a transaction amount.");
       return;
     }
-    fetchPayments();
+
+    try {
+      const paymentAmount = Number(formData.amount || 0);
+
+      // Fetch fresh, lock-safe data from master record to prevent transaction collision
+      const { data: student, error: fetchErr } = await supabase
+        .from("students")
+        .select("total_fee, other_fee, discount_fee, total_paid")
+        .eq("student_id", formData.student_id)
+        .single();
+
+      if (fetchErr || !student) {
+        alert("Verification failed: Chosen Student ID metadata missing.");
+        return;
+      }
+
+      const totalFee = Number(student.total_fee || 0);
+      const otherFee = Number(student.other_fee || 0);
+      const discountFee = Number(student.discount_fee || 0);
+      const feePayable = totalFee + otherFee - discountFee;
+
+      const updatedTotalPaid = Number(student.total_paid || 0) + paymentAmount;
+      const calculatedDuesRemaining = feePayable - updatedTotalPaid;
+      const newStatus = calculatedDuesRemaining <= 0 ? "Paid" : "Due";
+
+      // A. Push receipt row entry to Payments History Table
+      const { error: paymentErr } = await supabase.from("payments").insert([
+        {
+          student_id: formData.student_id,
+          student_name: formData.student_name,
+          class: formData.class,
+          payment_date: formData.payment_date,
+          amount: paymentAmount,
+          dues: calculatedDuesRemaining,
+          receipt_no: `REC-${Date.now().toString().slice(-6)}`,
+        },
+      ]);
+
+      if (paymentErr) throw paymentErr;
+
+      // B. Synchronize ledger updates back to core Students Directory Table
+      const { error: studentUpdateErr } = await supabase
+        .from("students")
+        .update({
+          total_paid: updatedTotalPaid,
+          fee_status: newStatus,
+        })
+        .eq("student_id", formData.student_id);
+
+      if (studentUpdateErr) throw studentUpdateErr;
+
+      alert("Transaction saved! Master ledger accounts balanced.");
+      setShowModal(false);
+
+      // Reset input layout values safely
+      setFormData({
+        student_id: "",
+        student_name: "",
+        class: "",
+        payment_date: new Date().toISOString().split("T")[0],
+        amount: "",
+      });
+      setStudentSearchInput("");
+      setSelectedStudentDues(0);
+
+      // Refresh backend snapshots
+      fetchPayments();
+      fetchStudentsDirectory();
+    } catch (error) {
+      console.error(error);
+      alert("Pipeline failure updating ledger tracking balances safely.");
+    }
   };
 
-  const totalRevenue = payments.reduce(
-    (sum, payment) => sum + Number(payment.amount || 0),
-    0
-  );
-
-  const totalDues = payments.reduce(
-    (sum, payment) => sum + Number(payment.dues || 0),
-    0
-  );
-
+  // Filter history logs for main directory grid
   const filteredPayments = payments.filter(
-    (payment) =>
-      payment.student_name?.toLowerCase().includes(search.toLowerCase()) ||
-      payment.receipt_no?.toLowerCase().includes(search.toLowerCase()) ||
-      payment.payment_date?.toLowerCase().includes(search.toLowerCase())
+    (p) =>
+      p.student_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.student_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.receipt_no?.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
+  // Filter student registry results list inside the modal search field
+  const filteredStudentSearchOptions = studentsList.filter(
+    (s) =>
+      s.name?.toLowerCase().includes(studentSearchInput.toLowerCase()) ||
+      s.student_id?.toLowerCase().includes(studentSearchInput.toLowerCase()),
   );
 
   return (
     <>
-      <div className="page-header">
+      {/* SECTION TOP MODULE HEADER WITH ALIGNED TOP-RIGHT BUTTON */}
+
+      <div
+        className="page-header"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          width: "100%",
+          marginBottom: "24px",
+        }}
+      >
         <div>
-          <h1 className="page-title">Fee Management</h1>
-          <p className="page-subtitle">Manage student payments and collections</p>
+          <h1 className="page-title">Fees & Accounts Workspace</h1>
+          <p className="page-subtitle">
+            Process incoming clearings, audit real-time transaction receipts,
+            and track outstandings
+          </p>
         </div>
 
-        <button className="btn" onClick={() => setShowModal(true)}>
-          + Receive Payment
+        <button
+          className="theme-btn"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            marginTop: "4px",
+            padding: "12px 20px",
+            width:
+              "max-content" /* Strict instruction to not stretch across screen */,
+            whiteSpace: "nowrap" /* Prevents layout word wrapping */,
+          }}
+          onClick={() => setShowModal(true)}
+        >
+          <MdAddCard style={{ fontSize: "18px" }} /> Collect Payment Receipt
         </button>
       </div>
 
-      <div className="cards">
-        <div className="card">
-          <h3>Total Collected</h3>
-          <p style={{ color: "#4ade80" }}>₹{totalRevenue}</p>
-        </div>
-
-        <div className="card">
-          <h3>Outstanding Dues</h3>
-          <p style={{ color: "#f87171" }}>₹{totalDues}</p>
-        </div>
-
-        <div className="card">
-          <h3>Transactions</h3>
-          <p>{payments.length}</p>
-        </div>
-      </div>
-
-      <div className="search-box">
+      {/* FILTER SEARCH FIELD FOR LEDGER TABLE */}
+      <div
+        className="search-bar"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          margin: "24px 0",
+          maxWidth: "450px",
+        }}
+      >
+        <MdSearch style={{ color: "var(--muted)", fontSize: "20px" }} />
         <input
           type="text"
-          placeholder="Search receipt number, student name..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search receipts by ID, name or code..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "#fff",
+            width: "100%",
+            outline: "none",
+          }}
         />
       </div>
 
+      {/* LEDGER TRANSACTION HISTORICAL RECORDS */}
       <div className="table-container">
         <table>
           <thead>
             <tr>
-              <th>Receipt ID</th>
-              <th>Student</th>
-              <th>Class</th>
-              <th>Date</th>
-              <th>Amount Paid</th>
-              <th>Dues Left</th>
-              <th>Actions</th>
+              <th>Receipt Code</th>
+              <th>Student ID</th>
+              <th>Payer Name</th>
+              <th>Class/Course</th>
+              <th>Payment Date</th>
+              <th>Amount Transacted</th>
+              <th>Remaining Dues Balance</th>
             </tr>
           </thead>
-
           <tbody>
-            {filteredPayments.length === 0 ? (
+            {loading ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: "center", color: "var(--muted)", padding: "30px" }}>
-                  No payment histories found.
+                <td
+                  colSpan="7"
+                  style={{
+                    textAlign: "center",
+                    color: "var(--muted)",
+                    padding: "30px",
+                  }}
+                >
+                  Auditing Transaction Records...
+                </td>
+              </tr>
+            ) : filteredPayments.length === 0 ? (
+              <tr>
+                <td
+                  colSpan="7"
+                  style={{
+                    textAlign: "center",
+                    color: "var(--muted)",
+                    padding: "30px",
+                  }}
+                >
+                  No matched receipt lines logged.
                 </td>
               </tr>
             ) : (
-              filteredPayments.map((payment) => (
-                <tr key={payment.id}>
-                  <td style={{ color: "#a5b4fc", fontWeight: "600" }}>{payment.receipt_no}</td>
-                  <td>{payment.student_name}</td>
-                  <td>{payment.class}</td>
-                  <td>{payment.payment_date}</td>
-                  <td style={{ color: "#4ade80", fontWeight: "600" }}>₹{payment.amount}</td>
-                  <td style={{ color: payment.dues > 0 ? "#f87171" : "var(--muted)" }}>₹{payment.dues}</td>
-                  <td>
-                    <button className="delete-btn" onClick={() => deletePayment(payment.id)}>
-                      Delete
-                    </button>
+              filteredPayments.map((p) => (
+                <tr key={p.id}>
+                  <td style={{ color: "#a5b4fc", fontWeight: "600" }}>
+                    {p.receipt_no}
+                  </td>
+                  <td style={{ color: "var(--muted)" }}>{p.student_id}</td>
+                  <td style={{ fontWeight: "500" }}>{p.student_name}</td>
+                  <td>{p.class || "—"}</td>
+                  <td>{p.payment_date}</td>
+                  <td style={{ color: "#4ade80", fontWeight: "600" }}>
+                    ₹{p.amount}
+                  </td>
+                  <td
+                    style={{
+                      color: p.dues > 0 ? "#f87171" : "#4ade80",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {p.dues > 0 ? `₹${p.dues}` : "Settled ✓"}
                   </td>
                 </tr>
               ))
@@ -177,84 +321,308 @@ function Fees() {
         </table>
       </div>
 
+      {/* MODAL BILLING POPUP WINDOW WITH EMBEDDED FILTER DROPDOWN SEARCH */}
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>Receive Fee Payment</h2>
-
-            <input
-              type="text"
-              placeholder="Type student name or search by code..."
-              value={formData.student_name || studentSearch}
-              onChange={(e) => {
-                setFormData({ ...formData, student_name: "" });
-                setStudentSearch(e.target.value);
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.75)",
+            backdropFilter: "blur(5px)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 999,
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              background: "#111827",
+              border: "1px solid var(--border)",
+              borderRadius: "16px",
+              padding: "28px",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.75)",
+              overflow: "visible",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "20px",
               }}
-            />
-
-            {studentSearch.length > 0 && (
-              <div className="student-dropdown">
-                {students
-                  .filter(
-                    (student) =>
-                      (student.name || "").toLowerCase().includes(studentSearch.toLowerCase()) ||
-                      (student.student_id || "").toLowerCase().includes(studentSearch.toLowerCase())
-                  )
-                  .slice(0, 5)
-                  .map((student) => (
-                    <div
-                      key={student.id}
-                      className="student-option"
-                      onClick={() => {
-                        setFormData({
-                          ...formData,
-                          student_id: student.student_id,
-                          student_name: student.name,
-                          class: student.class,
-                        });
-                        setStudentSearch("");
-                      }}
-                    >
-                      <div><strong>{student.name}</strong></div>
-                      <div style={{ color: "var(--muted)" }}>{student.student_id}</div>
-                    </div>
-                  ))}
-              </div>
-            )}
-
-            {formData.student_name && (
-              <div style={{ padding: "12px", background: "rgba(255,255,255,0.03)", borderRadius: "10px", margin: "4px 0" }}>
-                <h4 style={{ color: "#ffffff" }}>{formData.student_name}</h4>
-                <p style={{ fontSize: "12px", color: "var(--muted)" }}>ID: {formData.student_id} | Class: {formData.class}</p>
-              </div>
-            )}
-
-            <input
-              type="date"
-              value={formData.payment_date}
-              onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-            />
-            
-            <input
-              placeholder="Amount Paid (₹)"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-            />
-
-            <input
-              placeholder="Remaining Dues (₹)"
-              value={formData.dues}
-              onChange={(e) => setFormData({ ...formData, dues: e.target.value })}
-            />
-
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setShowModal(false)}>
-                Cancel
-              </button>
-              <button className="btn" onClick={addPayment}>
-                Save Payment
-              </button>
+            >
+              <h3
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  margin: 0,
+                  color: "#fff",
+                  fontSize: "18px",
+                }}
+              >
+                <MdReceiptLong style={{ color: "#818cf8" }} /> Log Fee Payment
+                Invoice
+              </h3>
+              <MdClose
+                style={{
+                  color: "var(--muted)",
+                  cursor: "pointer",
+                  fontSize: "22px",
+                }}
+                onClick={() => setShowModal(false)}
+              />
             </div>
+
+            <form
+              onSubmit={addPayment}
+              style={{ display: "flex", flexDirection: "column", gap: "18px" }}
+            >
+              {/* INTERACTIVE AUTOCOMPLETE DROPDOWN SEARCH COMPONENT */}
+              <div style={{ position: "relative" }}>
+                <strong
+                  style={{
+                    display: "block",
+                    marginBottom: "6px",
+                    fontSize: "13px",
+                    color: "#e5e7eb",
+                  }}
+                >
+                  Search Student Name or ID *
+                </strong>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    position: "relative",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Type name or code to filter search..."
+                    value={studentSearchInput}
+                    onChange={(e) => {
+                      setStudentSearchInput(e.target.value);
+                      setShowDropdown(true);
+                    }}
+                    onFocus={() => setShowDropdown(true)}
+                    required
+                    style={{ width: "100%", paddingRight: "35px" }}
+                  />
+                  <MdArrowDropDown
+                    style={{
+                      position: "absolute",
+                      right: "12px",
+                      color: "var(--muted)",
+                      fontSize: "20px",
+                      pointerEvents: "none",
+                    }}
+                  />
+                </div>
+
+                {/* Floating Results Popup Container */}
+                {showDropdown && studentSearchInput.length >= 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      width: "100%",
+                      background: "#1f2937",
+                      border: "1px solid var(--border)",
+                      borderRadius: "10px",
+                      marginTop: "4px",
+                      maxHeight: "180px",
+                      overflowY: "auto",
+                      zIndex: 1000,
+                      boxShadow: "0 10px 15px -3px rgba(0,0,0,0.5)",
+                    }}
+                  >
+                    {filteredStudentSearchOptions.length === 0 ? (
+                      <div
+                        style={{
+                          padding: "12px",
+                          color: "var(--muted)",
+                          fontSize: "13px",
+                          textAlign: "center",
+                        }}
+                      >
+                        No students match your query
+                      </div>
+                    ) : (
+                      filteredStudentSearchOptions.map((student) => (
+                        <div
+                          key={student.student_id}
+                          onClick={() => handleSelectStudent(student)}
+                          style={{
+                            padding: "10px 14px",
+                            cursor: "pointer",
+                            borderBottom: "1px solid rgba(255,255,255,0.02)",
+                            fontSize: "13px",
+                            transition: "background 0.15s ease",
+                            display: "flex",
+                            justifyContent: "space-between",
+                          }}
+                          onMouseEnter={(e) =>
+                            (e.target.style.background =
+                              "rgba(255,255,255,0.05)")
+                          }
+                          onMouseLeave={(e) =>
+                            (e.target.style.background = "transparent")
+                          }
+                        >
+                          <span style={{ fontWeight: "500", color: "#fff" }}>
+                            {student.name}
+                          </span>
+                          <span style={{ color: "#a5b4fc", fontSize: "12px" }}>
+                            {student.student_id}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* READ-ONLY SUMMARY FIELDS TO VERIFY TARGET PROFILE CORES */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "14px",
+                }}
+              >
+                <div>
+                  <strong
+                    style={{
+                      display: "block",
+                      marginBottom: "6px",
+                      fontSize: "13px",
+                      color: "var(--muted)",
+                    }}
+                  >
+                    Assigned Course
+                  </strong>
+                  <input
+                    type="text"
+                    value={formData.class || "—"}
+                    readOnly
+                    style={{
+                      background: "rgba(255,255,255,0.02)",
+                      color: "var(--muted)",
+                      cursor: "not-allowed",
+                    }}
+                  />
+                </div>
+                <div>
+                  <strong
+                    style={{
+                      display: "block",
+                      marginBottom: "6px",
+                      fontSize: "13px",
+                      color: "var(--muted)",
+                    }}
+                  >
+                    Current Dues Owed
+                  </strong>
+                  <input
+                    type="text"
+                    value={
+                      formData.student_id ? `₹${selectedStudentDues}` : "—"
+                    }
+                    readOnly
+                    style={{
+                      background: "rgba(255,255,255,0.02)",
+                      color: selectedStudentDues > 0 ? "#f87171" : "#4ade80",
+                      fontWeight: "600",
+                      cursor: "not-allowed",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <strong
+                  style={{
+                    display: "block",
+                    marginBottom: "6px",
+                    fontSize: "13px",
+                    color: "#e5e7eb",
+                  }}
+                >
+                  Date of Transaction
+                </strong>
+                <input
+                  type="date"
+                  value={formData.payment_date}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      payment_date: e.target.value,
+                    }))
+                  }
+                  required
+                />
+              </div>
+
+              <div>
+                <strong
+                  style={{
+                    display: "block",
+                    marginBottom: "6px",
+                    fontSize: "13px",
+                    color: "#e5e7eb",
+                  }}
+                >
+                  Payment Amount Collected (₹) *
+                </strong>
+                <input
+                  type="number"
+                  placeholder="Enter collection amount e.g. 5000"
+                  value={formData.amount}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, amount: e.target.value }))
+                  }
+                  max={
+                    selectedStudentDues > 0 ? selectedStudentDues : undefined
+                  }
+                  required
+                />
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "12px",
+                  marginTop: "10px",
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ marginTop: 0 }}
+                  onClick={() => setShowModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn"
+                  style={{ marginTop: 0, padding: "10px 24px" }}
+                >
+                  Authorize Receipt
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
