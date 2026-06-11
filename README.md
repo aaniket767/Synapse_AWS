@@ -1,8 +1,6 @@
-# Synapse AWS — School Management ERP Portal 🚀
+# Synapse AWS — Small Institute Management Portal 
 
-A high-performance, mobile-responsive School Enterprise Resource Planning (ERP) web application engineered to manage student directories, automate transactional ledger bookkeeping, and generate dynamic standalone financial invoices. 
-
-Built using **React (Vite)**, styled with an optimized dark-mode utility canvas.
+A high-performance, mobile-responsive IMP web application engineered to manage student directories, automate transactional ledger bookkeeping, and generate dynamic standalone financial invoices. 
 
 ---
 
@@ -31,6 +29,3 @@ Built using **React (Vite)**, styled with an optimized dark-mode utility canvas.
 
 ---
 
-## 🚀 Local Development Quickstart
-
-Follow these steps to spin up the management system locally on your workstation:
