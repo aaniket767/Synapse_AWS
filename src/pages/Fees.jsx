@@ -11,13 +11,11 @@ function Fees() {
     student_id: "",
     student_name: "",
     class: "",
-    payment_date: new Date()
-    .toISOString()
-    .split("T")[0],
+    payment_date: new Date().toISOString().split("T")[0],
     amount: "",
     dues: "",
   });
-  
+
   useEffect(() => {
     fetchStudents();
     fetchPayments();
@@ -42,20 +40,14 @@ function Fees() {
   }
 
   const addPayment = async () => {
-  if (
-    !formData.student_id ||
-    !formData.payment_date ||
-    !formData.amount
-  ) {
-    alert("Fill all required fields");
-    return;
-  }
+    if (!formData.student_id || !formData.payment_date || !formData.amount) {
+      alert("Fill all required fields");
+      return;
+    }
 
-  const receiptNo = `RCPT-${Date.now()}`;
+    const receiptNo = `RCPT-${Date.now()}`;
 
-  const { error } = await supabase
-    .from("payments")
-    .insert([
+    const { error } = await supabase.from("payments").insert([
       {
         student_id: formData.student_id,
         student_name: formData.student_name,
@@ -68,36 +60,30 @@ function Fees() {
       },
     ]);
 
-  if (error) {
-    console.error(error);
-    alert(error.message);
-    return;
-  }
+    if (error) {
+      console.error(error);
+      alert(error.message);
+      return;
+    }
 
-  await fetchPayments();
+    await fetchPayments();
 
-  setFormData({
-    student_id: "",
-    student_name: "",
-    class: "",
-    payment_date: new Date()
-      .toISOString()
-      .split("T")[0],
-    amount: "",
-    dues: "",
-  });
+    setFormData({
+      student_id: "",
+      student_name: "",
+      class: "",
+      payment_date: new Date().toISOString().split("T")[0],
+      amount: "",
+      dues: "",
+    });
 
-  setShowModal(false);
-};
+    setShowModal(false);
+  };
 
   const deletePayment = async (id) => {
-    if (!window.confirm("Delete payment?"))
-      return;
+    if (!window.confirm("Delete payment?")) return;
 
-    const { error } = await supabase
-      .from("payments")
-      .delete()
-      .eq("id", id);
+    const { error } = await supabase.from("payments").delete().eq("id", id);
 
     if (error) {
       console.error(error);
@@ -109,42 +95,33 @@ function Fees() {
 
   const totalRevenue = payments.reduce(
     (sum, payment) =>
-      sum +
-      Number(payment.amount || 0) +
-      Number(payment.dues || 0),
-    0
+      sum + Number(payment.amount || 0) + Number(payment.dues || 0),
+    0,
   );
 
   const filteredPayments = payments.filter(
     (payment) =>
-      payment.student_name
-        ?.toLowerCase()
-        .includes(search.toLowerCase()) ||
-      payment.receipt_no
-        ?.toLowerCase()
-        .includes(search.toLowerCase()) ||
-      payment.payment_date
-      ?.toLowerCase()
-        .includes(search.toLowerCase())
+      payment.student_name?.toLowerCase().includes(search.toLowerCase()) ||
+      payment.receipt_no?.toLowerCase().includes(search.toLowerCase()) ||
+      payment.payment_date?.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">
-            Fee Management
-          </h1>
+          <h1 className="page-title">Fee Management</h1>
 
-          <p className="page-subtitle">
-            Manage student payments
-          </p>
+          <p className="page-subtitle">Manage student payments</p>
         </div>
 
-        <button
-          className="btn"
-          onClick={() => setShowModal(true)}
-        >
+        <div className="page-top">
+          <button className="back-btn" onClick={() => navigate("/")}>
+            ← Dashboard
+          </button>
+        </div>
+
+        <button className="btn" onClick={() => setShowModal(true)}>
           + Receive Payment
         </button>
       </div>
@@ -166,9 +143,7 @@ function Fees() {
           type="text"
           placeholder="Search receipt, student, month..."
           value={search}
-          onChange={(e) =>
-            setSearch(e.target.value)
-          }
+          onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
@@ -199,9 +174,7 @@ function Fees() {
                 <td>
                   <button
                     className="delete-btn"
-                    onClick={() =>
-                      deletePayment(payment.id)
-                    }
+                    onClick={() => deletePayment(payment.id)}
                   >
                     Delete
                   </button>
@@ -217,88 +190,77 @@ function Fees() {
           <div className="modal">
             <h2>Receive Payment</h2>
 
-             <input
-                  type="text"
-                  placeholder="Search by name or ID..."
-                  value={
-                    formData.student_name ||
-                    studentSearch
-                  }
-                  onChange={(e) => {
-                    setFormData({
-                      ...formData,
-                      student_name: "",
-                    });
-                  
-                    setStudentSearch(
-                      e.target.value
-                    );
-                  }}
-               />
-
-                {studentSearch.length > 0 && (
-                <div className="student-dropdown">
-                  {students
-                    .filter(
-                      (student) =>
-                        student.name
-                          .toLowerCase()
-                          .includes(studentSearch.toLowerCase()) ||
-                        (student.student_id || "")
-                          .toLowerCase()
-                          .includes(studentSearch.toLowerCase())
-                    )
-                    .slice(0, 6)
-                    .map((student) => (
-                      <div
-                        key={student.id}
-                        className="student-option"
-                        onClick={() => {
-                          setFormData({
-                            ...formData,
-                            student_id: student.student_id,
-                            student_name: student.name,
-                            class: student.class,
-                          });
-                        
-                          setStudentSearch("");
-                        }}
-                      >
-                        <div>
-                          <strong>{student.name}</strong>
-                        </div>
-                      
-                        <div>
-                          {student.student_id}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-              {formData.student_name && 
-             <div className="selected-student">
-               <h4>{formData.student_name}</h4>
-
-               <p>
-                 ID: {formData.student_id}
-               </p>
-
-               <p>
-                 Class: {formData.class}
-               </p>
-             </div>
-            }
             <input
-                type="date"
-                value={formData.payment_date}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    payment_date: e.target.value,
-                  })
-                }
-              />
-             <input
+              type="text"
+              placeholder="Search by name or ID..."
+              value={formData.student_name || studentSearch}
+              onChange={(e) => {
+                setFormData({
+                  ...formData,
+                  student_name: "",
+                });
+
+                setStudentSearch(e.target.value);
+              }}
+            />
+
+            {studentSearch.length > 0 && (
+              <div className="student-dropdown">
+                {students
+                  .filter(
+                    (student) =>
+                      student.name
+                        .toLowerCase()
+                        .includes(studentSearch.toLowerCase()) ||
+                      (student.student_id || "")
+                        .toLowerCase()
+                        .includes(studentSearch.toLowerCase()),
+                  )
+                  .slice(0, 6)
+                  .map((student) => (
+                    <div
+                      key={student.id}
+                      className="student-option"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          student_id: student.student_id,
+                          student_name: student.name,
+                          class: student.class,
+                        });
+
+                        setStudentSearch("");
+                      }}
+                    >
+                      <div>
+                        <strong>{student.name}</strong>
+                      </div>
+
+                      <div>{student.student_id}</div>
+                    </div>
+                  ))}
+              </div>
+            )}
+            {formData.student_name && (
+              <div className="selected-student">
+                <h4>{formData.student_name}</h4>
+
+                <p>ID: {formData.student_id}</p>
+
+                <p>Class: {formData.class}</p>
+              </div>
+            )}
+            <input
+              type="date"
+              value={formData.payment_date}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  payment_date: e.target.value,
+                })
+              }
+            />
+            <input
               placeholder="Amount"
               value={formData.amount}
               onChange={(e) =>
@@ -323,17 +285,12 @@ function Fees() {
             <div className="modal-actions">
               <button
                 className="btn-secondary"
-                onClick={() =>
-                  setShowModal(false)
-                }
+                onClick={() => setShowModal(false)}
               >
                 Cancel
               </button>
 
-              <button
-                className="btn"
-                onClick={addPayment}
-              >
+              <button className="btn" onClick={addPayment}>
                 Save Payment
               </button>
             </div>

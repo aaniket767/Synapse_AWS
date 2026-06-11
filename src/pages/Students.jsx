@@ -171,10 +171,20 @@ const openEditModal = (student) => {
           </p>
         </div>
 
+        <div className="page-top">
+          <button
+            className="back-btn"
+            onClick={() => navigate("/")}
+          >
+            ← Dashboard
+          </button>
+        </div>
+      
         <button
           className="btn"
           onClick={() => {
           setEditingStudent(null);
+          navigate("/admission");
 
           setFormData({
             name: "",
@@ -186,7 +196,7 @@ const openEditModal = (student) => {
           setShowModal(true);
         }}
         >
-          + Add Student
+           + New Admissiom
         </button>
       </div>
 

@@ -7,6 +7,15 @@ function Reports() {
         Generate school reports
       </p>
 
+      <div className="page-top">
+        <button
+          className="back-btn"
+          onClick={() => navigate("/dashboard")}
+        >
+          ← Dashboard
+        </button>
+      </div>
+
       <div className="cards">
         <div className="card">
           <h3>Student Report</h3>
