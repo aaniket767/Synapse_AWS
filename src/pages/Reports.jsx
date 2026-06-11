@@ -6,13 +6,30 @@ import {
   MdPrint,
   MdAssessment,
 } from "react-icons/md";
-import { RiShieldFlashLine } from "react-icons/ri";
 
 function Reports() {
   const [studentsList, setStudentsList] = useState([]);
   const [studentSearchInput, setStudentSearchInput] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  // Default ko empty rakha hai taaki auto-select na ho
+  const [paidTillMonth, setPaidTillMonth] = useState("");
+  const [generatedPaymentId, setGeneratedPaymentId] = useState("");
+
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
 
   useEffect(() => {
     fetchStudentsDirectory();
@@ -23,7 +40,7 @@ function Reports() {
       const { data, error } = await supabase
         .from("students")
         .select(
-          "student_id, name, class, total_fee, other_fee, discount_fee, total_paid, father_name, phone",
+          "student_id, roll_no, name, class, total_fee, other_fee, discount_fee, total_paid, father_name, phone",
         );
       if (error) throw error;
       setStudentsList(data || []);
@@ -42,20 +59,24 @@ function Reports() {
     setSelectedStudent(student);
     setStudentSearchInput(`${student.name} (${student.student_id})`);
     setShowDropdown(false);
+    setPaidTillMonth(""); // Naye student par wapas reset ho jayega select karne ke liye
+
+    // Unique Payment ID Generator
+    const currentYear = new Date().getFullYear();
+    const randomDigits = Math.floor(10000 + Math.random() * 90000);
+    const newPaymentId = `SWC-${currentYear}-${randomDigits}`;
+    setGeneratedPaymentId(newPaymentId);
   };
 
-  // PURE BILL PRINT CONTROLLER ENGINE by Ai 
+  const handlePrintReceipt = () => {
+    const printContents = document.getElementById(
+      "printable-receipt-canvas",
+    ).innerHTML;
 
- const handlePrintReceipt = () => {
-    // 1. Grab the clean bill structural HTML layout
-    const printContents = document.getElementById("printable-receipt-canvas").innerHTML;
-    
-    // 2. Look for an existing hidden frame or create a brand new one dynamically
     let printFrame = document.getElementById("mobile-print-frame");
     if (!printFrame) {
       printFrame = document.createElement("iframe");
       printFrame.id = "mobile-print-frame";
-      // Position it safely off-screen so user never sees layout stuttering
       printFrame.style.position = "fixed";
       printFrame.style.right = "0";
       printFrame.style.bottom = "0";
@@ -64,75 +85,64 @@ function Reports() {
       printFrame.style.border = "none";
       document.body.appendChild(printFrame);
     }
-    
+
     const frameDoc = printFrame.contentWindow || printFrame.contentDocument;
     const doc = frameDoc.document || frameDoc;
-    
-    // 3. Write styling layout blocks inside the frame context cleanly
+
     doc.open();
     doc.write(`
       <html>
         <head>
-          <title>Fee Receipt Invoice</title>
+          <title>Payment Slip</title>
           <style>
-            body {
-              font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-              color: #000000;
-              background: #ffffff;
-              padding: 20px;
-              margin: 0;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 25px;
-            }
-            th {
-              background: #111827 !important;
-              color: #ffffff !important;
-              padding: 12px;
-              text-align: left;
-              font-size: 13px;
-            }
-            td {
-              padding: 12px;
-              font-size: 13px;
-              border-bottom: 1px solid #e5e7eb;
-            }
-            /* Webkit engines background optimizations */
-            * {
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
+            @page { size: portrait; margin: 12mm 10mm; }
+            body { font-family: Arial, sans-serif; color: #000000; background: #ffffff; padding: 5px; margin: 0; font-size: 14px; }
+            table { width: 100%; max-width: 440px; margin: 12px auto; border-collapse: collapse; }
+            th { background: #ffffff !important; color: #000000 !important; padding: 7px 12px; text-align: left; font-weight: normal; width: 45%; border: 1px solid #000000 !important; }
+            td { padding: 7px 12px; text-align: left; font-weight: bold; border: 1px solid #000000 !important; }
+            .assistance-bar { background-color: #a4bdf2 !important; text-align: center; padding: 7px; font-weight: normal; font-size: 11.5px; border: 1px solid #7395e3; max-width: 416px; margin: 15px auto; }
+            .footer-signatures { display: flex; justify-content: space-between; max-width: 440px; margin: 45px auto 10px auto; padding: 0 5px; }
+            .sig-block { font-size: 12px; color: #000000; width: 100px; text-align: center; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           </style>
         </head>
         <body>
           <div>${printContents}</div>
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 300); };
+          </script>
         </body>
       </html>
     `);
     doc.close();
-    
-    // 4. Trigger print manager context on frame element directly
-    setTimeout(() => {
-      printFrame.contentWindow.focus();
-      printFrame.contentWindow.print();
-    }, 250);
   };
-  
+
+  // Calculations
   const totalFee = Number(selectedStudent?.total_fee || 0);
   const otherFee = Number(selectedStudent?.other_fee || 0);
   const discountFee = Number(selectedStudent?.discount_fee || 0);
   const totalPaid = Number(selectedStudent?.total_paid || 0);
+
   const calculatedFeePayable = totalFee + otherFee - discountFee;
   const remainingBalance = calculatedFeePayable - totalPaid;
 
-  const dynamicReceiptCode = `RCPT-${Date.now().toString().slice(-6)}`;
-  const currentFormattedDate = new Date().toISOString().split("T")[0];
+  const currentFormattedDate = new Date().toLocaleDateString("en-IN");
 
   return (
     <>
-      {/* WEB DESKTOP DASHBOARD LAYER (Untouched, Safe from Page Deformations) */}
+      {/* CSS For Immersive Hover States */}
+      <style>{`
+        .immersive-item {
+          transition: all 0.2s ease-in-out;
+        }
+        .immersive-item:hover {
+          background-color: rgba(99, 102, 241, 0.15) !important;
+          color: #fff !important;
+          padding-left: 20px !important;
+        }
+      `}</style>
+
+      {/* WEB DASHBOARD WORKSPACE */}
       <div style={{ maxWidth: "800px", margin: "0 auto", padding: "20px 0" }}>
         <div className="page-header" style={{ marginBottom: "30px" }}>
           <h1
@@ -142,13 +152,9 @@ function Reports() {
             <MdAssessment style={{ color: "#818cf8" }} /> Student Billing
             Reports
           </h1>
-          <p className="page-subtitle">
-            Search a student profile to audit their bill or
-            issue a printable statement
-          </p>
         </div>
 
-        {/* SEARCH BAR INPUT BOX */}
+        {/* SEARCH BAR CONTAINER */}
         <div
           className="card"
           style={{
@@ -191,6 +197,11 @@ function Reports() {
                 setShowDropdown(true);
               }}
               onFocus={() => setShowDropdown(true)}
+              onBlur={() => {
+                setTimeout(() => {
+                  setShowDropdown(false);
+                }, 250);
+              }}
               style={{
                 width: "100%",
                 padding: "14px 40px 14px 45px",
@@ -209,7 +220,7 @@ function Reports() {
             />
           </div>
 
-          {/* AUTOCOMPLETE FLOATING SEARCH BOX */}
+          {/*  IMMERSIVE & HIGHLY CURVED SUGGESTION DROPDOWN */}
           {showDropdown && (
             <div
               style={{
@@ -217,44 +228,56 @@ function Reports() {
                 top: "100%",
                 left: "24px",
                 right: "24px",
-                background: "#1f2937",
-                border: "1px solid var(--border)",
-                borderRadius: "10px",
-                marginTop: "6px",
-                maxHeight: "220px",
+                background: "linear-gradient(145deg, #1f2937, #111827)",
+                border: "1px solid rgba(129, 140, 248, 0.25)",
+                borderRadius: "16px", // Highly Curved
+                marginTop: "10px",
+                maxHeight: "240px",
                 overflowY: "auto",
                 zIndex: 1000,
-                boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+                boxShadow:
+                  "0 12px 30px rgba(0, 0, 0, 0.4), 0 4px 10px rgba(0,0,0,0.3)",
+                padding: "6px",
               }}
             >
               {filteredStudentSearchOptions.length === 0 ? (
                 <div
                   style={{
-                    padding: "14px",
+                    padding: "16px",
                     color: "var(--muted)",
-                    fontSize: "14px",
                     textAlign: "center",
+                    fontSize: "14px",
                   }}
                 >
-                  No student entries matched that search text
+                  🔍 No student entries matched that search text
                 </div>
               ) : (
                 filteredStudentSearchOptions.map((student) => (
                   <div
                     key={student.student_id}
                     onClick={() => handleSelectStudent(student)}
+                    className="immersive-item"
                     style={{
                       padding: "12px 16px",
                       cursor: "pointer",
-                      borderBottom: "1px solid rgba(255,255,255,0.02)",
-                      fontSize: "14px",
-                      color: "#fff",
+                      borderRadius: "10px", // Curved corners for items
+                      color: "#e2e8f0",
                       display: "flex",
                       justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "2px",
                     }}
                   >
                     <span style={{ fontWeight: "500" }}>{student.name}</span>
-                    <span style={{ color: "#a5b4fc", fontSize: "13px" }}>
+                    <span
+                      style={{
+                        color: "#818cf8",
+                        fontSize: "13px",
+                        background: "rgba(129, 140, 248, 0.1)",
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                      }}
+                    >
                       {student.student_id}
                     </span>
                   </div>
@@ -264,9 +287,10 @@ function Reports() {
           )}
         </div>
 
-        {/* ACCOUNT PREVIEW STATS */}
+        {/* ACCOUNT MANAGEMENT PANEL */}
         {selectedStudent ? (
           <div className="card" style={{ padding: "28px" }}>
+            {/* CLEAN STUDENT PROFILE SUMMARY */}
             <div
               style={{
                 display: "flex",
@@ -288,158 +312,138 @@ function Reports() {
                     fontSize: "13px",
                   }}
                 >
-                  ID reference number: {selectedStudent.student_id}
+                  Student ID: {selectedStudent.student_id} |{" "}
+                  <span style={{ color: "#fcd34d" }}>
+                    Payment ID: {generatedPaymentId}
+                  </span>
                 </p>
               </div>
-              <button
-                className="theme-btn"
+            </div>
+
+            {/* SINGLE CONTROLS BUBBLE */}
+            <div
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(17, 24, 39, 0.9))",
+                border: "1px solid rgba(129, 140, 248, 0.15)",
+                borderRadius: "14px",
+                padding: "20px",
+                boxShadow: "0 6px 20px rgba(0, 0, 0, 0.2)",
+              }}
+            >
+              {/* Header inside bubble */}
+              <div
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                  marginTop: 0,
-                  padding: "10px 20px",
+                  marginBottom: "12px",
                 }}
-                onClick={handlePrintReceipt}
               >
-                <MdPrint style={{ fontSize: "18px" }} /> Print Official
-                Statement
-              </button>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "20px",
-                marginBottom: "30px",
-                fontSize: "14px",
-              }}
-            >
-              <p style={{ margin: 0 }}>
-                <strong style={{ color: "var(--muted)" }}>Course:</strong>{" "}
-                {selectedStudent.class || "—"}
-              </p>
-              <p style={{ margin: 0 }}>
-                <strong style={{ color: "var(--muted)" }}>Father Name:</strong>{" "}
-                {selectedStudent.father_name || "—"}
-              </p>
-              <p style={{ margin: 0 }}>
-                <strong style={{ color: "var(--muted)" }}>
-                  Mobile Contact:
-                </strong>{" "}
-                {selectedStudent.phone || "—"}
-              </p>
-              <p style={{ margin: 0 }}>
-                <strong style={{ color: "var(--muted)" }}>
-                  Account State:
-                </strong>{" "}
-                <span
+                <div
                   style={{
-                    color: remainingBalance > 0 ? "#f87171" : "#4ade80",
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: "#818cf8",
+                  }}
+                ></div>
+                <label
+                  style={{
+                    color: "#94a3b8",
                     fontWeight: "600",
+                    fontSize: "12px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
                   }}
                 >
-                  {remainingBalance > 0
-                    ? "Dues Outstanding"
-                    : "Account Cleared ✓"}
-                </span>
-              </p>
-            </div>
+                  Fee Paid Till Month Of:
+                </label>
+              </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
-                gap: "16px",
-              }}
-            >
+              {/* Flex Row Container */}
               <div
                 style={{
-                  padding: "16px",
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                  flexWrap: "wrap",
                 }}
               >
-                <h4
+                {/* Month Dropdown Selector (Not Auto-Selected) */}
+                <div style={{ position: "relative", width: "240px" }}>
+                  <select
+                    value={paidTillMonth}
+                    onChange={(e) => setPaidTillMonth(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "11px 40px 11px 14px",
+                      background: "#1e293b",
+                      color: paidTillMonth ? "#f8fafc" : "#94a3b8",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      fontWeight: "500",
+                      cursor: "pointer",
+                      appearance: "none",
+                      outline: "none",
+                    }}
+                  >
+                    {/* Placeholder option so nothing is pre-selected */}
+                    <option
+                      value=""
+                      disabled
+                      style={{ background: "#1e293b", color: "#94a3b8" }}
+                    >
+                      Select Month
+                    </option>
+                    {monthNames.map((m) => (
+                      <option
+                        key={m}
+                        value={m}
+                        style={{ background: "#1e293b", color: "#fff" }}
+                      >
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      color: "#818cf8",
+                      pointerEvents: "none",
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <MdArrowDropDown style={{ fontSize: "22px" }} />
+                  </div>
+                </div>
+
+                {/* Print Action Button */}
+                <button
+                  onClick={handlePrintReceipt}
                   style={{
-                    margin: "0 0 6px 0",
-                    color: "var(--muted)",
-                    fontSize: "12px",
-                    textTransform: "uppercase",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "11px 22px",
+                    background: "linear-gradient(135deg, #6366f1, #4f46e5)",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  Net Fee Payable
-                </h4>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "20px",
-                    fontWeight: "700",
-                    color: "#fff",
-                  }}
-                >
-                  ₹{calculatedFeePayable}
-                </p>
-              </div>
-              <div
-                style={{
-                  padding: "16px",
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "10px",
-                }}
-              >
-                <h4
-                  style={{
-                    margin: "0 0 6px 0",
-                    color: "var(--muted)",
-                    fontSize: "12px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Total Fees Collected
-                </h4>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "20px",
-                    fontWeight: "700",
-                    color: "#4ade80",
-                  }}
-                >
-                  ₹{totalPaid}
-                </p>
-              </div>
-              <div
-                style={{
-                  padding: "16px",
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "10px",
-                }}
-              >
-                <h4
-                  style={{
-                    margin: "0 0 6px 0",
-                    color: "var(--muted)",
-                    fontSize: "12px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Remaining Balance
-                </h4>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "20px",
-                    fontWeight: "700",
-                    color: remainingBalance > 0 ? "#f87171" : "#4ade80",
-                  }}
-                >
-                  ₹{remainingBalance}
-                </p>
+                  <MdPrint style={{ fontSize: "18px" }} /> Print Invoice Bill
+                </button>
               </div>
             </div>
           </div>
@@ -453,227 +457,115 @@ function Reports() {
             }}
           >
             <p style={{ margin: 0, color: "var(--muted)" }}>
-              No profiles queried yet. Select a student above to review
-              accounting layouts or print vouchers.
+              Select a student above to review accounting layouts.
             </p>
           </div>
         )}
       </div>
 
-      {/*
-         This block stays completely hidden from the web UI screen layout
-         */}
+      {/* HIDDEN PRINT CANVAS LAYOUT */}
       <div style={{ display: "none" }}>
-        <div id="printable-receipt-canvas">
-          {/* Header Branding Row */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              borderBottom: "2px solid #000",
-              paddingBottom: "20px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div
-                style={{
-                  background: "#111827",
-                  padding: "10px",
-                  borderRadius: "10px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <RiShieldFlashLine size={32} color="#818cf8" />
-              </div>
-              <div>
-                <h1
-                  style={{
-                    margin: 0,
-                    fontSize: "24px",
-                    fontWeight: "800",
-                    letterSpacing: "-0.5px",
-                    color: "#111827",
-                  }}
-                >
-                  Synapse AWS
-                </h1>
-                <p
-                  style={{
-                    margin: "2px 0 0 0",
-                    fontSize: "12px",
-                    color: "#4b5563",
-                  }}
-                >
-                  Patna, Bihar, India • Contact: support@synapse.aws
-                </p>
-              </div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "18px",
-                  fontWeight: "700",
-                  color: "#111827",
-                }}
-              >
-                Invoice
-              </h2>
-              <p
-                style={{
-                  margin: "4px 0 0 0",
-                  fontSize: "13px",
-                  color: "#1f2937",
-                }}
-              >
-                <strong>Doc Code Reference:</strong> {dynamicReceiptCode}
-              </p>
-              <p
-                style={{
-                  margin: "2px 0 0 0",
-                  fontSize: "12px",
-                  color: "#4b5563",
-                }}
-              >
-                <strong>Date of Generation:</strong> {currentFormattedDate}
-              </p>
+        <div
+          id="printable-receipt-canvas"
+          style={{ width: "100%", maxWidth: "440px", margin: "0 auto" }}
+        >
+          <div style={{ textAlign: "center", marginBottom: "15px" }}>
+            <h2
+              style={{
+                margin: "0 0 2px 0",
+                fontSize: "19px",
+                fontWeight: "800",
+              }}
+            >
+              SUCCESS WITH CLASS
+            </h2>
+            <p style={{ margin: "0 0 5px 0", fontSize: "11px", color: "#333" }}>
+              Patut, Bikram, Patna
+            </p>
+            <div
+              style={{
+                fontSize: "13px",
+                fontWeight: "bold",
+                borderBottom: "2px solid #000000",
+                display: "inline-block",
+                paddingBottom: "2px",
+                textTransform: "uppercase",
+                marginTop: "5px",
+              }}
+            >
+              Payment Slip
             </div>
           </div>
 
-          {/* Profile Identity Details Lines */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "20px",
-              margin: "30px 0",
-              padding: "18px",
-              background: "#f9fafb",
-              borderRadius: "8px",
-              border: "1px solid #e5e7eb",
-            }}
-          >
-            <div>
-              <p style={{ margin: "0 0 8px 0", fontSize: "13px" }}>
-                <strong>Student ID:</strong> {selectedStudent?.student_id}
-              </p>
-              <p style={{ margin: "0 0 8px 0", fontSize: "13px" }}>
-                <strong>Student Name:</strong> {selectedStudent?.name}
-              </p>
-              <p style={{ margin: "0", fontSize: "13px" }}>
-                <strong>Assigned Class/Course:</strong>{" "}
-                {selectedStudent?.class || "—"}
-              </p>
-            </div>
-            <div>
-              <p style={{ margin: "0 0 8px 0", fontSize: "13px" }}>
-                <strong>Father / Guardian Name:</strong>{" "}
-                {selectedStudent?.father_name || "—"}
-              </p>
-              <p style={{ margin: "0 0 8px 0", fontSize: "13px" }}>
-                <strong>Registered Mobile No:</strong>{" "}
-                {selectedStudent?.phone || "—"}
-              </p>
-              <p style={{ margin: "0", fontSize: "13px" }}>
-                <strong>Ledger Status Tag:</strong>{" "}
-                {remainingBalance <= 0
-                  ? "Account Satisfied ✓"
-                  : "Dues Unresolved"}
-              </p>
-            </div>
-          </div>
-
-          {/* Financial Breakdown Table Layout */}
           <table>
-            <thead>
-              <tr>
-                <th>Bill Summary</th>
-                <th style={{ textAlign: "right", width: "150px" }}>
-                  Amount Balance (₹)
-                </th>
-              </tr>
-            </thead>
             <tbody>
               <tr>
-                <td>Standard Course Fee</td>
-                <td style={{ textAlign: "right" }}>₹{totalFee}</td>
+                <th>Payment ID</th>
+                <td>{generatedPaymentId || "—"}</td>
               </tr>
               <tr>
-                <td>Other / External Fee</td>
-                <td style={{ textAlign: "right" }}>₹{otherFee}</td>
+                <th>Roll No</th>
+                <td>{selectedStudent?.roll_no || "—"}</td>
               </tr>
               <tr>
-                <td style={{ color: "#b91c1c", fontStyle: "italic" }}>
-                  Less: Granted Waivers / Concessions (-)
-                </td>
-                <td style={{ textAlign: "right", color: "#b91c1c" }}>
-                  -₹{discountFee}
-                </td>
+                <th>Course</th>
+                <td>{selectedStudent?.class || "—"}</td>
               </tr>
-              <tr class="row-highlight-payable">
-                <td>Net Calculated Fees</td>
-                <td style={{ textAlign: "right" }}>₹{calculatedFeePayable}</td>
+              <tr>
+                <th>Student Name</th>
+                <td>{selectedStudent?.name || "—"}</td>
               </tr>
-              <tr class="row-highlight-paid">
-                <td>TOTAL PAYMENTS RECEIVED (CREDIT)</td>
-                <td style={{ textAlign: "right" }}>-₹{totalPaid}</td>
+              <tr>
+                <th>Father's Name</th>
+                <td>{selectedStudent?.father_name || "—"}</td>
               </tr>
-              <tr class="row-highlight-dues ${remainingBalance <= 0 ? 'settled-text' : ''}">
-                <td>REMAINING BALANCE/DUES</td>
-                <td style={{ textAlign: "right" }}>
-                  {remainingBalance > 0
-                    ? `₹${remainingBalance}`
-                    : "Fully Settled ✓"}
-                </td>
+              <tr>
+                <th>Payment Date</th>
+                <td>{currentFormattedDate}</td>
+              </tr>
+              <tr>
+                <th>Month Paid</th>
+                <td>{paidTillMonth || "Not Selected"}</td>
+              </tr>
+              <tr>
+                <th>Received Amount</th>
+                <td>₹ {totalPaid ? Number(totalPaid).toFixed(2) : "0.00"}</td>
+              </tr>
+              <tr>
+                <th>Payment Mode</th>
+                <td>Cash</td>
+              </tr>
+              <tr>
+                <th>Fee Payable</th>
+                <td>₹ {calculatedFeePayable}</td>
+              </tr>
+              <tr>
+                <th>Total Paid Amount</th>
+                <td>₹ {totalPaid}</td>
+              </tr>
+              <tr>
+                <th>Remaining Amount</th>
+                <td>₹ {remainingBalance}</td>
               </tr>
             </tbody>
           </table>
 
-          {/* Footer Voucher Authority Block */}
-          <div
-            style={{
-              marginTop: "100px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-            }}
-          >
-            <div>
-              <p style={{ margin: "0", fontSize: "11px", color: "#6b7280" }}>
-                * Certified institutional financial database account extract
-                statement.
-              </p>
-              <p
-                style={{
-                  margin: "4px 0 0 0",
-                  fontSize: "11px",
-                  color: "#6b7280",
-                }}
-              >
-                Authorized audit document generated from cloud records engine.
-              </p>
+          <div className="assistance-bar">
+            For any assistance call us :- 7277543702 (Office Hrs.)
+          </div>
+
+          <div className="footer-signatures">
+            <div
+              className="sig-block"
+              style={{ borderTop: "1px dashed #000", paddingTop: "15px" }}
+            >
+              Signature
             </div>
-            <div style={{ textAlign: "center", width: "200px" }}>
-              <div
-                style={{
-                  borderBottom: "1px solid #000",
-                  width: "100%",
-                  marginBottom: "8px",
-                }}
-              ></div>
-              <p
-                style={{
-                  margin: "0",
-                  fontSize: "12px",
-                  fontWeight: "600",
-                  color: "#111827",
-                }}
-              >
-                Auditor Stamp
-              </p>
+            <div
+              className="sig-block"
+              style={{ borderTop: "1px dashed #000", paddingTop: "15px" }}
+            >
+              Stamp
             </div>
           </div>
         </div>
