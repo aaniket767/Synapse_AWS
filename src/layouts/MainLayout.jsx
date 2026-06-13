@@ -6,10 +6,10 @@ import { RiShieldFlashLine } from "react-icons/ri";
 function MainLayout({ children }) {
   const location = useLocation();
   
-  // 📱 Mobile me sidebar ko handle karne ki state (shuru me close rahega)
+  //  Mobile me sidebar ko handle karne ki state (shuru me close rahega)
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // 🔄 Function: Koi bhi page link click hote hi mobile me sidebar chup jayega
+  //  Function: Koi bhi page link click hote hi mobile me sidebar chup jayega
   const closeSidebarOnMobile = () => {
     setIsMobileOpen(false);
   };
@@ -17,7 +17,7 @@ function MainLayout({ children }) {
   return (
     <div className="layout">
       
-      {/* 🍔 Floating Toggle Button: Yeh sirf mobile par dikhega, layout ko bina touch kiye */}
+      {/*  Floating Toggle Button: Yeh sirf mobile par dikhega, layout ko bina touch kiye */}
       <button 
         className="mobile-menu-toggle-trigger"
         onClick={() => setIsMobileOpen(!isMobileOpen)}
@@ -25,7 +25,7 @@ function MainLayout({ children }) {
         {isMobileOpen ? "✕ Menu" : "☰ Menu"}
       </button>
 
-      {/* 🧭 Sidebar: Aapka original sidebar classes ke sath */}
+      {/*  Sidebar */}
       <aside className={`sidebar ${isMobileOpen ? "mobile-expanded" : "mobile-collapsed"}`}>
         
         {/* Centered GBrand Emblem */}

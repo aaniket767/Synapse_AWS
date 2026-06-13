@@ -116,8 +116,6 @@ body {
     transform: scale(1.05);
   }
 }
-/*    NAVIGATION LINKS
-   */
 
 nav {
   display: flex;
@@ -155,7 +153,7 @@ nav {
 
 /* Isolate the navigation text nodes so they clear columns nicely */
 .nav-text {
-  margin-left: 18px; /* Distinct separation gap from the icon */
+  margin-left: 18px; /* makes separation gap from the icon */
   opacity: 0;
   transform: translateX(-15px);
   transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -358,7 +356,7 @@ tr:hover {
   display: inline-block;
 }
 
-/* Main Action CTA Button  */
+/* Main Action  Button  */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -702,12 +700,12 @@ tr:hover {
     max-width: none;
   }
 }
-/* --- Desktop Default Hide Trigger --- */
+/*  Desktop Default Hide Trigger  */
 .mobile-menu-toggle-trigger {
   display: none;
 }
 
-/* --- Mobile Specific Fixes --- */
+/*  Mobile Specific Fixes  */
 @media (max-width: 768px) {
   
   /* Floating Toggle Trigger Button */

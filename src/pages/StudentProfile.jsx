@@ -14,7 +14,7 @@ function StudentProfile() {
   }, [id]);
 
   async function fetchStudent() {
-    // Safety check:thsi wiil not run the query if id is missing or undefined
+    // Safety check:this will not run the query if id is missing or undefined
     if (!id || id === "undefined") {
       console.warn("Aborted profile fetch: ID is undefined.");
       return;
@@ -53,7 +53,7 @@ function StudentProfile() {
     <>
       <div className="page-top" style={{ marginBottom: "20px" }}>
         <button className="back-btn" onClick={() => navigate("/students")}>
-          ← Back to Directory
+           Back to Directory
         </button>
       </div>
 
